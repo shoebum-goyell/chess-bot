@@ -67,7 +67,6 @@ class Piece:
 		for square in self.get_moves(board):
 			if not board.is_in_check(self.color, board_change=[self.pos, square.pos]):
 				output.append(square)
-		print(output)
 		return output
 
 

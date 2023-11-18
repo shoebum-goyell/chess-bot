@@ -7,6 +7,8 @@ from data.classes.pieces.Knight import Knight
 from data.classes.pieces.Queen import Queen
 from data.classes.pieces.King import King
 from data.classes.pieces.Pawn import Pawn
+import subprocess
+import copy
 
 
 # Game state checker
@@ -25,6 +27,42 @@ class Board:
 		self.squares = self.generate_squares()
 
 		self.setup_board()
+
+	# def copy(self):
+	# 	return copy.deepcopy(self.squares)
+	
+	def to_fen(self):
+		# Initialize an empty FEN string
+		fen = ''
+		# Iterate over each rank
+		for y in range(0, 8):
+			empty = 0
+			# Iterate over each file
+			for x in range(8):
+				piece = self.get_piece_from_pos((x, y))
+				# If the square is empty
+				if piece is None:
+					empty += 1
+				else:
+					# If the previous squares were empty, add the count to the FEN string
+					if empty > 0:
+						fen += str(empty)
+						empty = 0
+					# Add the piece to the FEN string
+					if(piece.color == 'white'):
+						fen += piece.notation
+					else:
+						fen += piece.notation.lower()
+			# If the last squares were empty, add the count to the FEN string
+			if empty > 0:
+				fen += str(empty)
+			# Separate ranks with a slash
+			if y < 7:
+				fen += '/'
+		# Add the current player
+		fen += ' ' + ('w' if self.turn == 'white' else 'b')
+		# TODO: Add castling availability, en passant target square, halfmove clock, and fullmove number
+		return fen + " KQkq - 0 1"
 
 	def loadFromFen(self, fen):
 		# Split the FEN string into main parts
@@ -66,24 +104,22 @@ class Board:
 
 	
 	def play_random_move(self):
-		# Check if it's black's turn
-		if self.turn == 'black':
-			# Generate all possible moves for black
-			possible_moves = []
-			for piece in [i.occupying_piece for i in self.squares if i.occupying_piece is not None and i.occupying_piece.color == 'black']:
-				a = [piece, piece.get_valid_moves(self)]
-				if(len(piece.get_valid_moves(self)) != 0):
-					possible_moves.append(a)
-			self.make_move(possible_moves)
+		possible_moves = []
+		for piece in [i.occupying_piece for i in self.squares if i.occupying_piece is not None and i.occupying_piece.color == 'black']:
+			a = [piece, piece.get_valid_moves(self)]
+			if(len(piece.get_valid_moves(self)) != 0):
+				possible_moves.append(a)
+		self.make_move(possible_moves)
+
+	def ai_move(self, oldpos, newpos):
+		pi = self.get_piece_from_pos(oldpos)
+		self.selected_piece = pi
+		self.selected_piece.move(self, self.get_square_from_pos(newpos))
+		self.turn = 'white' if self.turn == 'black' else 'black'
 
 	def make_move(self, possible_moves):
 		move = random.choice(possible_moves)
 		self.selected_piece = move[0]
-		print("yoooo")
-		print(self.selected_piece)
-		print("ysd")
-		print(move[1])
-		print("jhasdf")
 		self.selected_piece.move(self, random.choice(move[1]))
 		self.turn = 'white' if self.turn == 'black' else 'black'
 
@@ -152,8 +188,20 @@ class Board:
 
 		elif self.selected_piece.move(self, clicked_square):
 			self.turn = 'white' if self.turn == 'black' else 'black'
-			self.play_random_move()
-			print(self.squares)
+			fen = self.to_fen()
+			print(self.to_fen())
+			result = subprocess.run(["./main", "8", fen], capture_output = True, text = True)
+			s = 'abcdefgh'
+			x1 = s.index(result.stdout[0])
+			y1 = 8 - int(result.stdout[1])
+			pos = [x1, y1]
+			x2 = s.index(result.stdout[2])
+			y2 = 8 - int(result.stdout[3])
+			pos2 = [x2, y2]
+			print(result.stdout)
+			self.ai_move(pos, pos2)
+			# self.play_random_move()
+			# print(self.squares)
 
 
 		elif clicked_square.occupying_piece is not None:
@@ -206,18 +254,28 @@ class Board:
 		return output
 
 
+	# def is_in_checkmate(self, color):
+	# 	output = False
+
+	# 	for piece in [i.occupying_piece for i in self.squares]:
+	# 		if piece != None:
+	# 			if piece.notation == 'K' and piece.color == color:
+	# 				king = piece
+
+	# 	if king.get_valid_moves(self) == []:
+	# 		if self.is_in_check(color):
+	# 			output = True
+
+	# 	return output
+	
 	def is_in_checkmate(self, color):
 		output = False
-
-		for piece in [i.occupying_piece for i in self.squares]:
-			if piece != None:
-				if piece.notation == 'K' and piece.color == color:
-					king = piece
-
-		if king.get_valid_moves(self) == []:
+		validmoves = []
+		for piece in [i.occupying_piece for i in self.squares if i.occupying_piece is not None and i.occupying_piece.color == color]:
+			validmoves.extend(piece.get_valid_moves(self))
+		if validmoves == []:
 			if self.is_in_check(color):
 				output = True
-
 		return output
 
 
